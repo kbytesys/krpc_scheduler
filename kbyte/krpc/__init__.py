@@ -6,6 +6,10 @@ from threading import Thread, RLock
 import time
 import logging
 
+"""
+Base vessel telemetry class with some common streamed data. You can still subclass or add attributes if you need more
+telemetry data
+"""
 class KRPCVesselTelemetry():
     def __init__(self, conn, vessel):
         # Base telemetry
@@ -17,13 +21,12 @@ class KRPCVesselTelemetry():
         self.stage = conn.add_stream(getattr, vessel.control, 'current_stage')
         self.vessel_orbit_speed = conn.add_stream(getattr, vessel.flight(vessel.orbit.body.reference_frame), 'speed')
 
+    """
+    Add a new attribute from vessel.flight() generic data
+    """
     def add_vessel_flight_telemetry(self, attrib_name, proto_name):
         setattr(self, attrib_name, self.conn.add_stream(getattr, self.vessel.flight(), proto_name))
 
-    """
-    def vessel_orbit_speed(self):
-        return self.vessel.flight(self.vessel.orbit.body.reference_frame).speed
-    """
 
 class KRPCJob():
     def __init__(self, jobid, priority=10, stage=None):
