@@ -1,6 +1,6 @@
 """
-Sample contract jobs. We need to test the decouple at 13000 <= altitude <= 14000 with 300 <= speed <= 1200.
-We want to handle prelanch, solid booster and reenter too.
+Sample contract jobs. We need to test the decoupler at 13000 <= altitude <= 14000 with 300 <= speed <= 1200.
+We want to handle prelaunch, solid booster and reenter too.
 """
 
 
