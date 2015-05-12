@@ -1,5 +1,3 @@
-__author__ = 'Andrea'
-
 import krpc.client
 import krpc.service
 from threading import Thread, RLock
@@ -19,6 +17,9 @@ class KRPCVesselTelemetry():
         self.ut = conn.add_stream(getattr, conn.space_center, 'ut')
         self.altitude = conn.add_stream(getattr, vessel.flight(), 'mean_altitude')
         self.stage = conn.add_stream(getattr, vessel.control, 'current_stage')
+        self.apoapsis = conn.add_stream(getattr, vessel.orbit, 'apoapsis_altitude')
+        self.periapsis = conn.add_stream(getattr, vessel.orbit, 'periapsis_altitude')
+        self.eccentricity = conn.add_stream(getattr, vessel.orbit, 'eccentricity')
         self.vessel_orbit_speed = conn.add_stream(getattr, vessel.flight(vessel.orbit.body.reference_frame), 'speed')
 
     """
@@ -28,6 +29,12 @@ class KRPCVesselTelemetry():
         setattr(self, attrib_name, self.conn.add_stream(getattr, self.vessel.flight(), proto_name))
 
 
+"""
+Abstract class for scheduler jobs. You can create stage related jobs or always active jobs. Every job have got also an
+id (you have to assure that it is unique, if you want to remove them by id) and a priority value. Greater priority value
+means higher priority. You can disable/enable the job at your choice. When you set the expired field to true, the
+scheduler will remove the job.
+"""
 class KRPCJob():
     def __init__(self, jobid, priority=10, stage=None):
         self.priority = priority
@@ -36,16 +43,37 @@ class KRPCJob():
         self.disabled = False
         self.expired = False
 
-    def execute(self, telemetry, scheduler, stage, cycle_commands: set):
+    """
+    Execute the job. You can perform every action to vessel through the krpc api, but don't change the stage here. Use
+    the cycle_commands set instead. If you add "nextstage" to the set, the scheduler will perform a stage change at
+    end of its cycle. You can also add "shutdown" to abort the whole scheduler or you can add custom string command
+    that will be managed by jobs at the end of scheduler cycle.
+    """
+    def execute(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set):
         pass
 
-    def execute_exit_stage(self, telemetry, scheduler, stage, cycle_commands: set):
+    """
+    Perform commands at stage change. Look execute method doc for more info.
+    """
+    def execute_exit_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set):
         pass
 
-    def execute_enter_stage(self, telemetry, scheduler, stage, cycle_commands: set):
+    """
+    Perform commands at stage change. Look execute method doc for more info.
+    """
+    def execute_enter_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set):
         pass
 
-    def execute_custom_command(self, telemetry, scheduler, stage, command):
+    """
+    Execute a custom command at end of scheduler cycle. Look execute method doc for more info.
+    """
+    def execute_custom_command(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, command):
+        pass
+
+    """
+    Method called when the scheduler remove this job. You can use it when you need to perform some cleanups.
+    """
+    def remove_from_scheduler(self, scheduler: KRPCVesselScheduler):
         pass
 
 
@@ -85,6 +113,7 @@ class KRPCVesselScheduler(Thread):
         for job in self.joblist:
             if job.jobid == jobid:
                 self.joblist.remove(job)
+                job.remove_from_scheduler(self)
                 break
         self.queuelock.release()
 
@@ -95,6 +124,7 @@ class KRPCVesselScheduler(Thread):
         self.queuelock.acquire()
         try:
             self.joblist.remove(job)
+            job.remove_from_scheduler(self)
         except ValueError:
             pass
         self.queuelock.release()
