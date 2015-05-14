@@ -207,6 +207,8 @@ class KRPCVesselScheduler(Thread):
                 for job in cloned_jobs:
                     try:
                         job.execute(self.telemetry, self, scheduler_stage, cycle_commands)
+                        if "shutdown" in cycle_commands:
+                            break
                     except Exception as e:
                         log.error("Job Execution Error: jobid %s error %s" % (job.jobid, e))
 
