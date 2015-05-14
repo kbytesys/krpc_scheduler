@@ -232,8 +232,7 @@ class KRPCVesselScheduler(Thread):
                                 log.error("Job Execution Error: jobid %s error %s" % (job.jobid, e))
 
             # Try to emulate a real time scheduler.
-            sleep_time = self.frequency - ((time.monotonic() - start_monotonic) / 1000)
-
+            sleep_time = self.frequency - (time.monotonic() - start_monotonic)
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
