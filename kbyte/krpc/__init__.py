@@ -145,6 +145,7 @@ class KRPCVesselScheduler(Thread):
         self.shutdown = False
         scheduler_stage = self.telemetry.stage()
         while not self.shutdown:
+            start_monotonic = time.monotonic()
             self.queuelock.acquire()
             '''
             We want to assure list coherence and thread safe ops. First we clone the jobs list and perform some stage
@@ -228,7 +229,11 @@ class KRPCVesselScheduler(Thread):
                             except Exception as e:
                                 log.error("Job Execution Error: jobid %s error %s" % (job.jobid, e))
 
-            time.sleep(self.frequency)
+            # Try to emulate a real time scheduler.
+            sleep_time = self.frequency - ((time.monotonic() - start_monotonic) / 1000)
+
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
 
 
