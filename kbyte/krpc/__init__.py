@@ -7,10 +7,10 @@ import logging
 log = logging.getLogger('krpc_scheduler')
 
 
-class KRPCVesselTelemetry():
+class KRPCVesselTelemetry:
     """
-    Base vessel telemetry class with some common streamed data. You can still subclass or add attributes if you need more
-    telemetry data
+    Base vessel telemetry class with some common streamed data. You can still subclass or add attributes if you need
+     more telemetry data
     """
     def __init__(self, conn, vessel):
         # Base telemetry
@@ -25,23 +25,22 @@ class KRPCVesselTelemetry():
         self.eccentricity = conn.add_stream(getattr, vessel.orbit, 'eccentricity')
         self.vessel_orbit_speed = conn.add_stream(getattr, vessel.flight(vessel.orbit.body.reference_frame), 'speed')
 
-
     def add_vessel_flight_telemetry(self, attrib_name, proto_name):
         """
         Add a new attribute from vessel.flight() generic data
         """
         setattr(self, attrib_name, self.conn.add_stream(getattr, self.vessel.flight(), proto_name))
 
-class KRPCVesselScheduler(Thread):
-    pass
+    def is_active_vessel(self):
+        return self.vessel == self.space_center.active_vessel
 
 
-class KRPCJob():
+class KRPCJob:
     """
-    Abstract class for scheduler jobs. You can create stage related jobs or always active jobs. Every job have got also an
-    id (you have to assure that it is unique, if you want to remove them by id) and a priority value. Greater priority value
-    means higher priority. You can disable/enable the job at your choice. When you set the expired field to true, the
-    scheduler will remove the job.
+    Abstract class for scheduler jobs. You can create stage related jobs or always active jobs. Every job have got also
+    an id (you have to assure that it is unique, if you want to remove them by id) and a priority value. Greater
+    priority value means higher priority. You can disable/enable the job at your choice. When you set the expired field
+    to true, the scheduler will remove the job.
     """
     def __init__(self, jobid, priority=10, stage=None):
         self.priority = priority
@@ -52,20 +51,22 @@ class KRPCJob():
 
     def execute(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set):
         """
-        Execute the job. You can perform every action to vessel through the krpc api, but don't change the stage here. Use
-        the cycle_commands set instead. If you add "nextstage" to the set, the scheduler will perform a stage change at
-        end of its cycle. You can also add "shutdown" to abort the whole scheduler or you can add custom string command
-        that will be managed by jobs at the end of scheduler cycle.
+        Execute the job. You can perform every action to vessel through the krpc api, but don't change the stage here.
+        Use the cycle_commands set instead. If you add "nextstage" to the set, the scheduler will perform a stage change
+        at end of its cycle. You can also add "shutdown" to abort the whole scheduler or you can add custom string
+        command that will be managed by jobs at the end of scheduler cycle.
         """
         pass
 
-    def execute_exit_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set):
+    def execute_exit_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage,
+                           cycle_commands: set):
         """
         Perform commands at stage change. Look execute method doc for more info.
         """
         pass
 
-    def execute_enter_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set):
+    def execute_enter_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage,
+                            cycle_commands: set):
         """
         Perform commands at stage change. Look execute method doc for more info.
         """
@@ -89,19 +90,23 @@ class KRPCVesselScheduler(Thread):
     """
     Scheduler class, you can perform scheduler jobs with a configurable frequency
     """
+
+    # noinspection PyTypeChecker
     def __init__(self, conn: krpc.client.Client, telemetry: KRPCVesselTelemetry=None, frequency=0.5):
         Thread.__init__(self)
         self.conn = conn
         self.telemetry = telemetry
         self.space_center = conn.space_center
-        self.vessel = conn.space_center.active_vessel
         self.frequency = frequency
         self.joblist = list()
         self.queuelock = RLock()
         self.shutdown = True
 
         if telemetry is None:
+            self.vessel = conn.space_center.active_vessel
             self.telemetry = KRPCVesselTelemetry(self.conn, self.vessel)
+        else:
+            self.vessel = telemetry.vessel
 
     def register_job(self, job: KRPCJob):
         """
@@ -138,13 +143,19 @@ class KRPCVesselScheduler(Thread):
 
     def run(self):
         """
-        Run the scheduler. In every cycle the scheduler manege the job list cleanup from expired items, manage stage changes,
-        execute allowed jobs by status and current stage and perform end cycle commands requested by jobs. Please check the
-        KRPCJob doc for better infos.
+        Run the scheduler. In every cycle the scheduler manege the job list cleanup from expired items, manage stage
+        changes, execute allowed jobs by status and current stage and perform end cycle commands requested by jobs.
+        Please check the KRPCJob doc for better infos.
         """
         self.shutdown = False
         scheduler_stage = self.telemetry.stage()
         while not self.shutdown:
+            '''
+            Disable the scheduler if we are in space center, vab, etc...
+            '''
+            if self.conn.krpc.current_game_scene.name != 'flight':
+                time.sleep(1)
+                continue
             start_monotonic = time.monotonic()
             self.queuelock.acquire()
             '''
@@ -169,7 +180,7 @@ class KRPCVesselScheduler(Thread):
 
             '''
             Check the current stage, if the scheduler stage is minor of telemetry stage, we have switched vessel or
-            reverted the flight. Abort the scheduler to avoid an atomic fallout.
+            reverted the flight. Abort the scheduler to avoid a nuclear fallout.
             '''
             if scheduler_stage < self.telemetry.stage():
                 log.error("Scheduler stage not coerent!!! Vechile switch???")
@@ -190,14 +201,14 @@ class KRPCVesselScheduler(Thread):
                                 job.execute_exit_stage(self.telemetry, self, scheduler_stage, cycle_commands)
                             except Exception as e:
                                 log.error("Job Exit Stage error: jobid %s stage %s error %s" %
-                                              (job.jobid, scheduler_stage, e))
+                                          (job.jobid, scheduler_stage, e))
                         scheduler_stage -= 1
                         for job in cloned_jobs:
                             try:
                                 job.execute_enter_stage(self.telemetry, self, scheduler_stage, cycle_commands)
                             except Exception as e:
                                 log.error("Job Enter Stage error: jobid %s stage %s error %s" %
-                                              (job.jobid, scheduler_stage, e))
+                                          (job.jobid, scheduler_stage, e))
 
                 '''
                 Main scheduler duty. Every job is executed from the priority queue. Every job can add elements to
@@ -235,11 +246,3 @@ class KRPCVesselScheduler(Thread):
             sleep_time = self.frequency - (time.monotonic() - start_monotonic)
             if sleep_time > 0:
                 time.sleep(sleep_time)
-
-
-
-
-
-
-
-
