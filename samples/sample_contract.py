@@ -2,13 +2,11 @@
 Sample contract jobs. We need to test the decoupler at 13000 <= altitude <= 14000 with 300 <= speed <= 1200.
 We want to handle prelaunch, solid booster and reenter too.
 """
-
-
+import sys
 from kbyte.krpc import *
 import krpc
 conn = krpc.connect(name='Contract Experiment')
-import logging
-import sys
+
 
 # use console for log
 root = logging.getLogger()
@@ -22,6 +20,7 @@ root.addHandler(ch)
 kslog = logging.getLogger("krpc_scheduler")
 kslog.setLevel(logging.DEBUG)
 log = logging.getLogger("main")
+
 
 class SolidDetach(KRPCJob):
     def __init__(self):
@@ -43,6 +42,7 @@ class PreLaunch(KRPCJob):
         telemetry.vessel.control.sas = True
         telemetry.vessel.control.throttle = 1
         self.expired = True
+
 
 class ExperimentJob(KRPCJob):
     def __init__(self):

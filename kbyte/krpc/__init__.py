@@ -4,6 +4,8 @@ from threading import Thread, RLock
 import time
 import logging
 
+from krpc.stream import Stream
+
 log = logging.getLogger('krpc_scheduler')
 
 
@@ -25,14 +27,23 @@ class KRPCVesselTelemetry:
         self.eccentricity = conn.add_stream(getattr, vessel.orbit, 'eccentricity')
         self.vessel_orbit_speed = conn.add_stream(getattr, vessel.flight(vessel.orbit.body.reference_frame), 'speed')
 
-    def add_vessel_flight_telemetry(self, attrib_name, proto_name):
+    def add_telemetry_value(self, attrib_name, stream_obj):
         """
-        Add a new attribute from vessel.flight() generic data
+        Add a new attribute from a krpc stream class
         """
-        setattr(self, attrib_name, self.conn.add_stream(getattr, self.vessel.flight(), proto_name))
+        setattr(self, attrib_name, stream_obj)
 
     def is_active_vessel(self):
         return self.vessel == self.space_center.active_vessel
+
+    def destroy(self):
+        for attr, value in self.__dict__.iteritems():
+            if type(value) is Stream:
+                value.remove()
+
+
+class KRPCVesselScheduler(Thread):
+    pass
 
 
 class KRPCJob:
