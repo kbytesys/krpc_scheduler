@@ -26,7 +26,10 @@ class SolidDetach(KRPCJob):
     def __init__(self):
         KRPCJob.__init__(self, 'detach_booster')
 
-    def execute(self, telemetry, scheduler, stage, cycle_commands: set):
+    def execute(self, telemetry, scheduler, stage, cycle_commands: set, is_active: bool):
+        if not is_active:
+            return
+
         if telemetry.vessel.resources.amount('SolidFuel') == 0:
             kslog.info('Booster separation')
             self.disabled = True
@@ -38,7 +41,10 @@ class PreLaunch(KRPCJob):
     def __init__(self):
         KRPCJob.__init__(self, 'prelaunch_settings')
 
-    def execute(self, telemetry, scheduler, stage, cycle_commands):
+    def execute(self, telemetry, scheduler, stage, cycle_commands, is_active: bool):
+        if not is_active:
+            return
+
         telemetry.vessel.control.sas = True
         telemetry.vessel.control.throttle = 1
         self.expired = True
@@ -48,7 +54,10 @@ class ExperimentJob(KRPCJob):
     def __init__(self):
         KRPCJob.__init__(self, 'test_part', stage=2)
 
-    def execute(self, telemetry, scheduler, stage, cycle_commands: set):
+    def execute(self, telemetry, scheduler, stage, cycle_commands: set, is_active: bool):
+        if not is_active:
+            return
+
         kslog.debug("speed: %s\nalt: %s" % (telemetry.vessel_orbit_speed(), telemetry.altitude()))
         if telemetry.altitude() > 14000:
             kslog.warning("Experiment failed!!! ABORT ABORT")
@@ -71,7 +80,10 @@ class DeployPara(KRPCJob):
     def __init__(self):
         KRPCJob.__init__(self, 'mk16deploy', stage=1)
 
-    def execute(self, telemetry, scheduler, stage, cycle_commands: set):
+    def execute(self, telemetry, scheduler, stage, cycle_commands: set, is_active: bool):
+        if not is_active:
+            return
+
         if telemetry.altitude() <= 5000:
             kslog.info("Deploy chutes")
             cycle_commands.add('nextstage')

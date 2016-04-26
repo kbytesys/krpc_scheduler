@@ -60,7 +60,8 @@ class KRPCJob:
         self.disabled = False
         self.expired = False
 
-    def execute(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set):
+    def execute(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, cycle_commands: set,
+                is_active: bool):
         """
         Execute the job. You can perform every action to vessel through the krpc api, but don't change the stage here.
         Use the cycle_commands set instead. If you add "nextstage" to the set, the scheduler will perform a stage change
@@ -70,20 +71,21 @@ class KRPCJob:
         pass
 
     def execute_exit_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage,
-                           cycle_commands: set):
+                           cycle_commands: set, is_active: bool):
         """
         Perform commands at stage change. Look execute method doc for more info.
         """
         pass
 
     def execute_enter_stage(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage,
-                            cycle_commands: set):
+                            cycle_commands: set, is_active: bool):
         """
         Perform commands at stage change. Look execute method doc for more info.
         """
         pass
 
-    def execute_custom_command(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, command):
+    def execute_custom_command(self, telemetry: KRPCVesselTelemetry, scheduler: KRPCVesselScheduler, stage, command,
+                               is_active: bool):
         """
         Execute a custom command at end of scheduler cycle. Look execute method doc for more info.
         """
@@ -190,6 +192,11 @@ class KRPCVesselScheduler(Thread):
             self.queuelock.release()
 
             '''
+            Store the active vehicle status because we won't execute multiple rpc requests
+            '''
+            is_active_vehicle = self.telemetry.is_active_vessel()
+
+            '''
             Check the current stage, if the scheduler stage is minor of telemetry stage, we have switched vessel or
             reverted the flight. Abort the scheduler to avoid a nuclear fallout.
             '''
@@ -209,14 +216,16 @@ class KRPCVesselScheduler(Thread):
                         log.info("Change stage from %d to %d" % (scheduler_stage, self.telemetry.stage()))
                         for job in cloned_jobs:
                             try:
-                                job.execute_exit_stage(self.telemetry, self, scheduler_stage, cycle_commands)
+                                job.execute_exit_stage(self.telemetry, self, scheduler_stage, cycle_commands,
+                                                       is_active_vehicle)
                             except Exception as e:
                                 log.error("Job Exit Stage error: jobid %s stage %s error %s" %
                                           (job.jobid, scheduler_stage, e))
                         scheduler_stage -= 1
                         for job in cloned_jobs:
                             try:
-                                job.execute_enter_stage(self.telemetry, self, scheduler_stage, cycle_commands)
+                                job.execute_enter_stage(self.telemetry, self, scheduler_stage, cycle_commands,
+                                                        is_active_vehicle)
                             except Exception as e:
                                 log.error("Job Enter Stage error: jobid %s stage %s error %s" %
                                           (job.jobid, scheduler_stage, e))
@@ -228,7 +237,7 @@ class KRPCVesselScheduler(Thread):
                 '''
                 for job in cloned_jobs:
                     try:
-                        job.execute(self.telemetry, self, scheduler_stage, cycle_commands)
+                        job.execute(self.telemetry, self, scheduler_stage, cycle_commands, is_active_vehicle)
                         if "shutdown" in cycle_commands:
                             break
                     except Exception as e:
@@ -249,7 +258,8 @@ class KRPCVesselScheduler(Thread):
                     for job in cloned_jobs:
                         if not job.disabled and not job.expired:
                             try:
-                                job.execute_custom_command(self.telemetry, self, scheduler_stage, cmd)
+                                job.execute_custom_command(self.telemetry, self, scheduler_stage, cmd,
+                                                           is_active_vehicle)
                             except Exception as e:
                                 log.error("Job Execution Error: jobid %s error %s" % (job.jobid, e))
 
